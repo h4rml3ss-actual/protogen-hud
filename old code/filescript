@@ -1,0 +1,134 @@
+from pathlib import Path
+
+# Define project structure
+files_to_create = {
+    "main.py": """\
+# main.py
+# Entrypoint: starts HUD and orchestrates modules
+
+def main():
+    # TODO: Initialize camera stream and window
+    # TODO: Start service threads (metrics, audio, gps, wifi)
+    # TODO: Begin render loop drawing widgets onto video frames
+    # TODO: Handle shutdown signals and cleanup
+    pass
+
+if __name__ == "__main__":
+    main()
+""",
+
+    "camera.py": """\
+# camera.py
+# Handles camera stream abstraction
+
+class CameraStream:
+    def __init__(self):
+        # TODO: Initialize OpenCV video capture
+        pass
+
+    def read(self):
+        # TODO: Return the latest frame
+        pass
+
+    def stop(self):
+        # TODO: Release camera resources
+        pass
+""",
+
+    "metrics.py": """\
+# metrics.py
+# Collects CPU, RAM, and other system metrics
+
+def get_system_metrics():
+    # TODO: Use psutil to gather CPU, RAM, disk, and temp
+    return {}
+""",
+
+    "audio_visualizer.py": """\
+# audio_visualizer.py
+# Audio input and circular FFT drawing logic
+
+def start_audio_stream():
+    # TODO: Start audio capture from microphone
+    pass
+
+def draw_audio_visualizer(frame):
+    # TODO: Draw circular bars based on FFT from audio stream
+    pass
+""",
+
+    "wifi_scanner.py": """\
+# wifi_scanner.py
+# Scans for nearby Wi-Fi networks and parses output
+
+def scan_wifi():
+    # TODO: Use iwlist wlan0 scan and return parsed results
+    return []
+""",
+
+    "gps_tracker.py": """\
+# gps_tracker.py
+# Reads GPS data and calculates heading and speed
+
+def start_gps_worker():
+    # TODO: Start GPSD client and update position/heading
+    pass
+""",
+
+    "draw_utils.py": """\
+# draw_utils.py
+# Helper functions for drawing HUD widgets
+
+def draw_text(frame, text, position, color):
+    # TODO: Draw text on frame using OpenCV
+    pass
+
+def draw_bar(frame, value, max_value, position, color):
+    # TODO: Draw horizontal bar for metric value
+    pass
+""",
+
+    "theme.py": """\
+# theme.py
+# Defines HUD neon theme colors and layout settings
+
+NEON_PURPLE = (128, 0, 128)
+NEON_PINK   = (255, 20, 147)
+NEON_GREEN  = (0, 255, 0)
+NEON_ORANGE = (255, 165, 0)
+NEON_BLUE   = (0, 191, 255)
+
+FONT = 0  # OpenCV font type
+FONT_SCALE = 0.6
+THICKNESS = 2
+""",
+
+    "service_threads.py": """\
+# service_threads.py
+# Starts and manages worker threads for HUD services
+
+def start_all_services():
+    # TODO: Launch metrics, wifi, gps, and audio threads
+    pass
+
+def stop_all_services():
+    # TODO: Signal all threads to cleanly shut down
+    pass
+""",
+
+    "requirements.txt": """\
+opencv-python
+numpy
+psutil
+sounddevice
+gps
+"""
+}
+
+# Create project directory structure
+project_dir = Path(".")
+for filename, content in files_to_create.items():
+    path = project_dir / filename
+    path.write_text(content)
+
+print("HUD scaffold created successfully.")

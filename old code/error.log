@@ -1,0 +1,20 @@
+Unhandled exception occurred:
+Traceback (most recent call last):
+  File "/home/operator/HUD/main.py", line 57, in main
+    draw_compass(frame, gps_heading if gps_heading else 0)
+  File "/home/operator/HUD/gps_tracker.py", line 61, in draw_compass
+    thread = threading.Thread(target=gps_thread, daemon=True)
+                                     ^^^^^^^^^^
+NameError: name 'gps_thread' is not defined
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/operator/HUD/main.py", line 85, in <module>
+    main()
+  File "/home/operator/HUD/main.py", line 80, in main
+    stop_all_services()
+  File "/home/operator/HUD/service_threads.py", line 23, in stop_all_services
+    stop_handles["gps"].set()
+    ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'set'
