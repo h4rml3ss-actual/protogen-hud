@@ -1,1 +1,45 @@
+# Old code archive
 /oldcode
+
+# Python cache and bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# Runtime logs and temporary files
+startup.log
+error.log
+*.log
+
+# Wi-Fi calibration data (user-specific)
+.wifi_calibration.json
+
+# Task implementation summaries (temporary documentation)
+TASK_*_IMPLEMENTATION_SUMMARY.md
+TASK_*_COMPLETION_REPORT.md
+INTEGRATION_TEST_REPORT.md
+
+# IDE and editor settings
+.vscode/
+.idea/
+.kiro/
+*.swp
+*.swo
+*~
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Test coverage and reports
+.coverage
+htmlcov/
+.pytest_cache/
