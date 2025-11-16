@@ -3,3 +3,4 @@ numpy
 psutil
 sounddevice
 gps
+adafruit-circuitpython-bno08x

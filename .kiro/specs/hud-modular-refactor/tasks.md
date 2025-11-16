@@ -1,0 +1,346 @@
+# Implementation Plan
+
+- [x] 1. Create SharedState infrastructure
+  - [x] 1.1 Implement SharedState class with thread-safe data storage
+    - Create `shared_state.py` with SharedState class
+    - Implement `threading.Lock()` for all data access
+    - Add data fields for GPS, IMU, system metrics, Wi-Fi, and audio
+    - Implement thread-safe setter methods for each data type
+    - Implement thread-safe getter methods for each data type
+    - Implement `get_snapshot()` method that returns all data in single lock
+    - Initialize all fields with safe defaults (None, empty lists, etc.)
+    - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.9_
+
+- [x] 2. Create ServiceManager infrastructure
+  - [x] 2.1 Implement ServiceManager class for lifecycle coordination
+    - Create `service_manager.py` with ServiceManager class
+    - Implement `__init__` that accepts shared_state and config dict
+    - Implement `start_all()` method that starts enabled services
+    - Track all started threads and their stop_event objects
+    - Implement `stop_all()` method that signals all services to stop
+    - Add timeout logic to wait up to 5 seconds for graceful shutdown
+    - Add logging for service start/stop events
+    - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
+
+- [x] 3. Refactor SystemMetricsService to use SharedState
+  - [x] 3.1 Create system_metrics.py service module
+    - Create `system_metrics.py` with `start_system_metrics_service()` function
+    - Accept shared_state and stop_event parameters
+    - Create daemon thread that runs metrics collection loop
+    - Use existing psutil code to collect CPU, RAM, network stats
+    - Implement platform-agnostic temperature reading with fallback
+    - Call `shared_state.set_system_metrics()` with collected data
+    - Sleep for 1 second between updates
+    - Check stop_event and exit gracefully when set
+    - Wrap main loop in try/except with error logging
+    - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 2.8_
+
+- [x] 4. Refactor GPSTrackerService to use SharedState
+  - [x] 4.1 Refactor gps_tracker.py to use SharedState pattern
+    - Modify `start_gps_worker()` to accept shared_state and stop_event
+    - Remove global variables (gps_heading, latitude, longitude, speed)
+    - Update GPS thread to call `shared_state.set_gps_data()`
+    - Check if IMU heading exists before writing GPS heading
+    - Add connection retry logic with exponential backoff
+    - Wrap main loop in try/except with error logging
+    - Move `draw_compass()` function to renderer module (will be done in step 8)
+    - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8_
+
+- [x] 5. Create IMUTrackerService for BNO085 sensor
+  - [x] 5.1 Implement imu_tracker.py service module
+    - Create `imu_tracker.py` with `start_imu_tracker_service()` function
+    - Accept shared_state and stop_event parameters
+    - Initialize I2C connection to BNO085 using adafruit library
+    - Try common I2C addresses (0x4A, 0x4B)
+    - Configure sensor for rotation vector output
+    - Create daemon thread that polls sensor at ~50Hz
+    - Convert quaternion to Euler angles (heading, pitch, roll)
+    - Call `shared_state.set_imu_data()` with sensor data
+    - Check stop_event and exit gracefully when set
+    - Handle sensor initialization failure gracefully (log and exit)
+    - Wrap main loop in try/except with error logging
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
+
+- [x] 6. Refactor WiFiScannerService to use SharedState
+  - [x] 6.1 Refactor wifi_scanner.py to use SharedState pattern
+    - Modify `scan_wifi()` to accept interface parameter
+    - Create `start_wifi_scanner_service()` function
+    - Accept shared_state, stop_event, and interface parameters
+    - Remove global variables (_last_wifi_scan, _last_scan_time, _current_index)
+    - Move rotation logic to renderer (will be done in step 8)
+    - Create daemon thread that runs scan loop
+    - Execute iwlist scan and parse results
+    - Call `shared_state.set_wifi_networks()` with scan results
+    - Sleep for 15 seconds between scans
+    - Check stop_event and exit gracefully when set
+    - Handle scan failures gracefully (permissions, interface down)
+    - Wrap main loop in try/except with error logging
+    - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7, 5.8_
+
+- [x] 7. Create WiFiLocatorService for direction finding
+  - [x] 7.1 Implement wifi_locator.py service module
+    - Create `wifi_locator.py` with `start_wifi_locator_service()` function
+    - Accept shared_state, stop_event, left_interface, right_interface parameters
+    - Create daemon thread that runs direction estimation loop
+    - Read Wi-Fi scan results from shared_state for both interfaces
+    - Read current heading from shared_state (IMU or GPS)
+    - Compare signal strength between left and right adapters for each SSID
+    - Calculate direction estimate: left stronger = left side, right stronger = right side
+    - Combine with current heading to get absolute direction
+    - Calculate confidence based on signal strength differential
+    - Call `shared_state.set_wifi_direction()` for each estimated AP
+    - Sleep for 5 seconds between updates
+    - Check stop_event and exit gracefully when set
+    - Wrap main loop in try/except with error logging
+    - _Requirements: 6.1, 6.2, 6.3, 6.4, 6.5_
+
+- [x] 8. Refactor AudioService to use SharedState
+  - [x] 8.1 Refactor audio_visualizer.py into audio_service.py
+    - Create `audio_service.py` with `start_audio_service()` function
+    - Accept shared_state and stop_event parameters
+    - Keep existing sounddevice stream setup
+    - Modify audio_callback to write buffer to shared_state
+    - Remove hardcoded WM8960 device search (use default or config)
+    - Keep audio passthrough functionality
+    - Start audio stream in daemon mode
+    - Handle audio device initialization failure gracefully
+    - _Requirements: 7.8_
+
+- [x] 9. Create unified Renderer module
+  - [x] 9.1 Implement hud_renderer.py with all drawing logic
+    - Create `hud_renderer.py` with `render_hud(frame, state_snapshot)` function
+    - Import existing draw_utils and theme modules
+    - Implement system metrics rendering (left side)
+    - Implement GPS info rendering (left side, below metrics)
+    - Move compass drawing from gps_tracker.py and implement compass rendering
+    - Implement Wi-Fi network list rendering (right side)
+    - Add Wi-Fi network rotation logic (moved from scanner service)
+    - Implement audio visualizer rendering with FFT computation
+    - Integrate existing RF overlay rendering from main.py
+    - Add Wi-Fi direction indicators on compass
+    - Handle missing data gracefully (display "N/A" or skip)
+    - Apply neon color theme to all elements
+    - Return modified frame
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10_
+
+- [x] 10. Update main.py to use new architecture
+  - [x] 10.1 Refactor main.py orchestration
+    - Create configuration dict with service enable flags
+    - Initialize SharedState instance
+    - Initialize CameraStream (no changes needed)
+    - Initialize ServiceManager with shared_state and config
+    - Call service_manager.start_all() to start all services
+    - Create OpenCV window (keep existing code)
+    - Modify main loop to read frame from camera
+    - Modify main loop to call shared_state.get_snapshot()
+    - Modify main loop to call render_hud(frame, snapshot)
+    - Display rendered frame (keep existing code)
+    - On shutdown, call service_manager.stop_all()
+    - Stop camera stream
+    - Close OpenCV windows
+    - Keep existing error logging and startup logging
+    - _Requirements: 8.1, 8.2, 8.3, 8.4, 8.5, 8.6, 8.7, 8.8, 8.9, 8.10, 8.11, 8.12_
+
+- [x] 11. Update service_threads.py to use ServiceManager
+  - [x] 11.1 Refactor service_threads.py to use new pattern
+    - Update `start_all_services()` to use ServiceManager
+    - Update `stop_all_services()` to use ServiceManager
+    - Remove direct service calls (audio, GPS)
+    - Delegate to ServiceManager for all service lifecycle
+    - _Requirements: 9.1, 9.2, 9.3_
+
+- [x] 12. Add configuration support for optional modules
+  - [x] 12.1 Implement configuration system
+    - Define config dict structure in main.py or separate config.py
+    - Add enable/disable flags for GPS, IMU, Wi-Fi locator
+    - Add interface names for Wi-Fi adapters
+    - Update ServiceManager to respect enable flags
+    - Update Renderer to show "N/A" for disabled services
+    - Document configuration options in comments
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 10.5, 10.6_
+
+- [x] 13. Integration and cleanup
+  - [x] 13.1 Remove deprecated code and verify integration
+    - Remove old global variables from all modules
+    - Remove deprecated functions that have been moved
+    - Verify all imports are correct
+    - Update requirements.txt if new dependencies added
+    - Test system startup and shutdown
+    - Verify all services write to SharedState correctly
+    - Verify renderer reads from SharedState correctly
+    - Check for any remaining hardcoded values that should be configurable
+    - _Requirements: All_
+
+- [x] 14. Add RF device classification and distance estimation to WiFiScannerService
+  - [x] 14.1 Implement device type classification, distance calculation, and color assignment
+    - Update RF device data model in SharedState to include device_type, frequency, distance_m, and color fields
+    - Modify `wifi_scanner.py` to extract frequency information from scan results
+    - Implement device classification function that analyzes SSID patterns
+    - Add regex patterns for known drone manufacturers (DJI, Phantom, Mavic, Parrot, Autel)
+    - Classify devices based on frequency band (5.8GHz more likely drone)
+    - Classify devices based on channel selection patterns
+    - Default to "router" for standard Wi-Fi on common channels
+    - Default to "unknown" for unrecognized patterns
+    - Implement distance estimation function using path loss formula
+    - Calculate distance for 2.4GHz devices: `distance_m = 10^((27.55 - RSSI) / 20)`
+    - Calculate distance for 5.8GHz devices: `distance_m = 10^((27.55 - RSSI - 7.6) / 20)`
+    - Adjust transmit power assumptions based on device type (20 dBm for routers, 27 dBm for drones)
+    - Assign unique color to each device using `assign_device_color(ssid)` function
+    - Update `set_wifi_networks()` calls to include device_type, frequency, distance_m, and color for each device
+    - Add numeric signal_dbm field for easier comparison
+    - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5, 11.6, 11.7, 11.8, 11.9, 15.1, 15.2, 15.3, 15.7_
+
+- [x] 14.2 Add triangulation distance refinement to WiFiLocatorService
+  - [x] 14.2.1 Enhance WiFiLocatorService with triangulation
+    - Add adapter_separation_m parameter to `start_wifi_locator_service()` (default 0.15m)
+    - For each device visible on both adapters, calculate individual distances from each adapter
+    - Calculate distance from left adapter: `d_L = 10^((27.55 - RSSI_L) / 20)`
+    - Calculate distance from right adapter: `d_R = 10^((27.55 - RSSI_R) / 20)`
+    - Implement triangulation using weighted average: `distance = (d_L * RSSI_R + d_R * RSSI_L) / (RSSI_L + RSSI_R)`
+    - Update SharedState with triangulated distance (overrides single-adapter estimate)
+    - Add confidence metric based on signal strength differential
+    - Document adapter_separation_m configuration in comments
+    - Test triangulation accuracy at known distances
+    - _Requirements: 15.4, 15.5, 15.6_
+
+- [x] 14.3 Update configuration to specify USB adapter interfaces
+  - [x] 14.3.1 Enhance configuration documentation for USB adapters
+    - Update config dict in main.py or config.py to clearly specify USB adapter interfaces
+    - Add comments warning NOT to use onboard wireless (typically wlan0 or wlp1s0)
+    - Document that USB adapters are typically wlan1, wlan2, or wlx[mac_address]
+    - Add separate config keys: wifi_scan_interface, wifi_left_interface, wifi_right_interface
+    - Add adapter_separation_m configuration parameter
+    - Include example commands in comments for identifying interfaces:
+      - `ip link show` - list all network interfaces
+      - `iwconfig` - show wireless interfaces
+      - `lsusb` - verify USB Wi-Fi adapters are connected
+      - `iw dev` - show detailed interface information
+    - Add validation in ServiceManager to check that specified interfaces exist
+    - Log warning if onboard wireless interface is accidentally configured
+    - _Requirements: 10.1, 10.2, 10.3, 10.4, 15.4_
+
+- [x] 15. Implement heading readout bar in Renderer
+  - [x] 15.1 Create heading readout bar rendering function
+    - Add `draw_heading_bar(frame, heading, rf_devices)` function to hud_renderer.py
+    - Calculate bar position at top center of frame (80% width, 60px height)
+    - Draw semi-transparent background with neon cyan border
+    - Calculate visible degree range (current heading ±60°)
+    - Draw degree scale with major ticks every 10° and minor ticks every 5°
+    - Draw cardinal direction markers (N, E, S, W) at appropriate positions
+    - Draw current heading indicator (vertical line and digital readout)
+    - Position RF device icons at their relative bearing on the scale
+    - Draw device type icons in white/light gray
+    - Apply colored border/highlight around each icon using device's unique color
+    - Display distance estimate below each icon (e.g., "~15m")
+    - Implement icon stacking logic for devices within 5° of each other
+    - Draw connecting lines from stacked icons to scale positions (in device's unique color)
+    - Integrate heading bar into main `render_hud()` function
+    - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5, 12.6, 12.7, 12.8, 12.9, 15.5, 15.7, 15.8, 15.9_
+
+- [x] 16. Enhance compass indicators with device types and stacking
+  - [x] 16.1 Update compass rendering with enhanced indicators
+    - Create device type icon rendering functions (router, drone, unknown icons)
+    - Update compass drawing to use device type icons instead of generic markers
+    - Draw device type icons in white/light gray
+    - Apply colored border/highlight around each icon using device's unique color
+    - Add device type, distance, and color to direction indicator data structure
+    - Display distance estimate next to each compass indicator label
+    - Implement label stacking logic for devices within 15° on compass
+    - Draw leader lines from stacked labels to compass ring positions (in device's unique color)
+    - Add semi-transparent backgrounds to labels for readability
+    - Prioritize closer/stronger signals at top of stack
+    - Update compass rendering in `render_hud()` to use enhanced indicators
+    - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 15.6, 15.8, 15.9_
+
+- [x] 17. Update RF device list display with device types and distances
+  - [x] 17.1 Enhance RF device list rendering
+    - Update RF device list rendering function to show device type icons
+    - Add device type icon to left side of each list entry (white/light gray)
+    - Apply colored border/highlight around icon using device's unique color
+    - Add colored accent bar on left edge of each list entry (device's unique color)
+    - Display distance estimate next to SSID (e.g., "MyRouter ~15m")
+    - Format distance as meters for < 1000m, kilometers for >= 1000m
+    - Prefix distance with "~" to indicate approximation
+    - Display channel number below SSID in smaller text
+    - Update signal strength display to show both bar and dBm value
+    - Implement device type grouping with section headers (optional)
+    - Update rotation logic to handle all device types
+    - Ensure color consistency: same device has same color across heading bar, compass, and list
+    - Test with mixed device types (routers, drones, unknown)
+    - _Requirements: 14.1, 14.2, 14.3, 14.4, 14.5, 14.6, 14.7, 14.8, 15.5, 15.8, 15.9_
+
+- [x] 18. Create device type icon assets and individual device color system
+  - [x] 18.1 Define icon rendering and color assignment system
+    - Add DEVICE_COLOR_PALETTE list to theme.py with 12+ distinct colors
+    - Create `assign_device_color(ssid)` function that uses hash-based color assignment
+    - Ensure consistent color assignment for same SSID across sessions
+    - Create `draw_router_icon()` function using OpenCV primitives (WiFi waves symbol)
+    - Create `draw_drone_icon()` function using OpenCV primitives (quadcopter silhouette)
+    - Create `draw_unknown_icon()` function using OpenCV primitives (question mark or RF waves)
+    - Draw icons in white/light gray (not colored by type)
+    - Ensure all icons are 24x24 pixels for heading bar, 20x20 for compass
+    - Create helper function to draw colored border/highlight around icons
+    - Test icon visibility and color distinction against HUD background
+    - Document two-layer visual system (type icons + individual colors) in comments
+    - _Requirements: 11.7, 11.8, 11.9, 12.7, 12.8, 13.2, 13.4_
+
+- [x] 19. Implement startup Wi-Fi adapter calibration
+  - [x] 19.1 Create adapter detection functions
+    - Implement `get_wifi_interfaces()` function in main.py or utils module
+    - Use `iw dev` command to list all wireless interfaces
+    - Filter out onboard wireless (wlan0, wlp1s0, wlp*)
+    - Return list of USB adapter interface names
+    - Implement `find_new_interface(old_list, new_list)` helper function
+    - Returns the interface that appears in new_list but not in old_list
+    - Add error handling for command execution failures
+    - _Requirements: 16.1, 16.2_
+
+- [x] 19.2 Implement interactive calibration workflow
+  - [x] 19.2.1 Create calibrate_wifi_adapters() function
+    - Add calibration function to main.py startup sequence
+    - Display clear instructions: "Make sure BOTH adapters are DISCONNECTED"
+    - Wait for user confirmation (Enter key)
+    - Get baseline interfaces (onboard wireless only)
+    - Prompt: "Connect the RIGHT adapter (switch ON)"
+    - Wait for user confirmation
+    - Sleep 2 seconds for USB enumeration
+    - Detect right adapter interface
+    - Display detected interface name
+    - Prompt: "Connect the LEFT adapter (switch ON)"
+    - Wait for user confirmation
+    - Sleep 2 seconds for USB enumeration
+    - Detect left adapter interface
+    - Display detected interface name
+    - Prompt for adapter separation in cm (default 15)
+    - Convert to meters and validate (0.05m to 0.5m range)
+    - Return configuration dict with left_interface, right_interface, scan_interface, separation_m
+    - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7_
+
+- [x] 19.3 Add calibration skip option
+  - [x] 19.3.1 Implement optional calibration skip
+    - Add command-line argument `--skip-calibration`
+    - Store last calibration in temporary file or memory
+    - Load previous calibration if skip flag is set
+    - Display warning if using previous calibration
+    - Show which interfaces are being used
+    - Add timeout option for automatic skip after 30 seconds
+    - _Requirements: 16.8_
+
+- [x] 20. Integration testing for enhanced features
+  - [x] 20.1 Test all enhanced HUD features together
+    - Run Wi-Fi adapter configuration utility and verify correct identification
+    - Test heading readout bar with various heading values
+    - Test device classification with real Wi-Fi scans
+    - Test distance estimation accuracy at known distances
+    - Verify distance display formatting (meters vs kilometers)
+    - Test triangulation with dual adapters at known positions
+    - Test icon stacking on heading bar with multiple close devices
+    - Test compass indicator stacking with multiple close devices
+    - Test RF device list with mixed device types and distances
+    - Verify color coding consistency across all display elements
+    - Test with dual Wi-Fi adapters for direction finding
+    - Test graceful degradation when no RF devices detected
+    - Verify performance impact of enhanced rendering
+    - Test distance estimates for both 2.4GHz and 5.8GHz devices
+    - Test with swapped left/right adapters to verify configuration matters
+    - _Requirements: 11.1-11.7, 12.1-12.9, 13.1-13.6, 14.1-14.8, 15.1-15.12, 16.1-16.7_

@@ -1,28 +1,73 @@
 # service_threads.py
 # Starts and manages worker threads for HUD services
+# This module now delegates to ServiceManager for all service lifecycle management
 
-from audio_visualizer import start_audio_stream
-from gps_tracker import start_gps_worker
+from service_manager import ServiceManager
+from shared_state import SharedState
 
-# Global reference to stop signals
-stop_handles = {}
+# Global reference to ServiceManager instance
+_service_manager = None
+_shared_state = None
 
-def start_all_services():
+
+def start_all_services(shared_state=None, config=None):
     """
     Starts all background services needed for the HUD.
-    """
-    # Start the audio stream service for the HUD
-    start_audio_stream()
     
-    # Start the GPS worker service and store its stop handle in the dictionary
-    stop_handles["gps"] = start_gps_worker()
-    # Add future services and their stop handles to this dictionary
+    This function now delegates to ServiceManager for all service lifecycle management.
+    
+    Args:
+        shared_state: SharedState instance for thread-safe data storage (optional)
+        config: Configuration dictionary specifying which services to enable (optional)
+                If not provided, uses default configuration.
+    """
+    global _service_manager, _shared_state
+    
+    # Create SharedState if not provided
+    if shared_state is None:
+        _shared_state = SharedState()
+    else:
+        _shared_state = shared_state
+    
+    # Use default config if not provided
+    if config is None:
+        config = {
+            "enable_system_metrics": True,
+            "enable_gps": True,
+            "enable_imu": False,
+            "enable_wifi_scanner": True,
+            "enable_wifi_locator": False,
+            "enable_audio": True,
+            "wifi_interface": "wlan0",
+            "wifi_left_interface": "wlan0",
+            "wifi_right_interface": "wlan1"
+        }
+    
+    # Initialize ServiceManager with shared_state and config
+    _service_manager = ServiceManager(_shared_state, config)
+    
+    # Delegate to ServiceManager to start all services
+    _service_manager.start_all()
+
 
 def stop_all_services():
     """
     Signals all services to stop gracefully.
+    
+    This function now delegates to ServiceManager for graceful shutdown.
     """
-    # Check if the GPS service is running and signal it to stop
-    if "gps" in stop_handles:
-        stop_handles["gps"].set()
-    # Extend this as needed for additional stoppable services
+    global _service_manager
+    
+    # Delegate to ServiceManager to stop all services
+    if _service_manager is not None:
+        _service_manager.stop_all()
+
+
+def get_shared_state():
+    """
+    Returns the SharedState instance used by the services.
+    
+    Returns:
+        SharedState instance or None if services haven't been started
+    """
+    return _shared_state
